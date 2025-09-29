@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
