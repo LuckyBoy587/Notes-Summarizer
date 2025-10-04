@@ -2,7 +2,13 @@
 
 This project extracts topics from a PDF, splits the text into topics, and paraphrases the content using a T5 model.
 
-## Setup
+## Colab Usage
+
+For easy running on Google Colab, use the `Colab_Run.ipynb` notebook. It will automatically clone the repository, install dependencies, and allow you to upload a PDF for processing.
+
+Open it directly: [Colab_Run.ipynb](https://colab.research.google.com/github/LuckyBoy587/Notes-Summarizer/blob/master/Colab_Run.ipynb)
+
+## Local Setup
 
 1. Install dependencies:
    ```
