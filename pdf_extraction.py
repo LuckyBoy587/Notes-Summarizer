@@ -183,6 +183,8 @@ def extract_topics_from_pdf(pdf_path, write_to_file=False):
                 if len(text) < 30 and not is_bullet:
                     continue
                 # keep bullets as individual lines
+                if (text[-1].isalnum()):
+                    text += '.'
                 if is_bullet:
                     output += '- ' + text + '\n'
                 else:
@@ -219,6 +221,7 @@ if __name__ == "__main__":
         # Print a concise preview to verify output without flooding the console
         preview = result if len(result) <= 2000 else result[:2000] + "\n... (truncated)"
         print(preview)
+        # print(split_into_topics(result))
     else:
         print("Unexpected return value:", type(result))
     print("\n--- done ---")
