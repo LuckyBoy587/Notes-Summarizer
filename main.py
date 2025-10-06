@@ -4,6 +4,7 @@ from paraphrasing import paraphrase_chunks
 from pdf_extraction import extract_topics_from_pdf
 import os
 import torch
+import nltk
 
 def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
     # Process PDF: Extract topics, split, paraphrase, and save (use fast sampling for extraction)
@@ -54,4 +55,6 @@ def run(argv=None):
 
 
 if __name__ == '__main__':
+    nltk.download('punkt')
+    nltk.download('punkt_tab')  # For better sentence tokenization with tabs
     run()
