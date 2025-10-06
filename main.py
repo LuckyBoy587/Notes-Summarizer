@@ -1,5 +1,5 @@
 import argparse
-from config import model, tokenizer, device
+from config import get_model_tokenizer_device
 from text_processing import split_into_topics
 from paraphrasing import paraphrase_chunks
 from pdf_extraction import extract_topics_from_pdf
@@ -14,9 +14,11 @@ def process_text_and_write_to_file(topics, filename="paraphrased_output.txt"):
         filename (str): The name for the output file.
     """
     output_content = ""
+    # Ensure model is loaded lazily only when paraphrasing
+    get_model_tokenizer_device()
     for topic, chunks in topics.items():
         print(chunks)
-        bullets = paraphrase_chunks(chunks, model, tokenizer, device)
+        bullets = paraphrase_chunks(chunks)
 
         # Format as bullet points
         output_content += f"\n## {topic}\n"
