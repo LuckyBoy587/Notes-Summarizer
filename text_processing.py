@@ -1,9 +1,9 @@
 import re
-import nltk
 
-nltk.download('punkt')
-nltk.download('punkt_tab')
-from nltk.tokenize import sent_tokenize
+# Defer heavy imports (nltk) until actually needed by functions
+def _get_sent_tokenize():
+    from nltk.tokenize import sent_tokenize
+    return sent_tokenize
 
 def split_into_topics(text):
     lines = text.split("\n")
@@ -19,7 +19,8 @@ def split_into_topics(text):
             block = re.sub(r'\s+', ' ', block).strip()
             # Replace dashes/bullets with colons for readability
             block = re.sub(r'\s*[-–]+\s*', ': ', block)
-            # Split into sentences
+            # Split into sentences (import lazily)
+            sent_tokenize = _get_sent_tokenize()
             return sent_tokenize(block)
         return []
 
@@ -42,6 +43,7 @@ def split_into_topics(text):
     return topics
 
 def merge_short_sentences(text, min_words=15):
+    sent_tokenize = _get_sent_tokenize()
     sentences = sent_tokenize(text)
     print(len(sentences), sentences)
     merged = []

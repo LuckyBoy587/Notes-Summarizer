@@ -1,6 +1,7 @@
-from config import model, tokenizer, device
+from config import get_model_tokenizer_device
+from math import ceil
 
-def paraphrase(text, num_return_sequences=1):
+def paraphrase(text, num_return_sequences=1, max_length=256, num_beams=2, do_sample=False):
     input_text = "paraphrase: " + text + " </s>"
     encoding = tokenizer.encode_plus(
         input_text,
@@ -10,19 +11,18 @@ def paraphrase(text, num_return_sequences=1):
         return_tensors="pt"
     )
 
-    # Move inputs to GPU
+    # Move inputs to device
+    model, tokenizer, device = get_model_tokenizer_device()
     input_ids = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
 
     outputs = model.generate(
         input_ids=input_ids,
         attention_mask=attention_mask,
-        max_length=256,
+        max_length=max_length,
         num_return_sequences=num_return_sequences,
-        num_beams=5,
-        temperature=1.5,
-        top_k=50,
-        top_p=0.95
+        num_beams=num_beams,
+        do_sample=do_sample
     )
 
     paraphrased = [tokenizer.decode(output, skip_special_tokens=True, clean_up_tokenization_spaces=True)
@@ -30,31 +30,54 @@ def paraphrase(text, num_return_sequences=1):
 
     return paraphrased
 
-def paraphrase_chunks(chunks, model, tokenizer, device):
+
+def paraphrase_chunks(chunks, batch_size=8, num_beams=2, max_length=128, do_sample=False):
+    """
+    Paraphrase a list of text chunks using batched generation to reduce overhead.
+
+    Args:
+        chunks (List[str]): list of strings to paraphrase
+        batch_size (int): number of chunks to process in one forward pass
+        num_beams (int): beam size (lower -> faster)
+        max_length (int): max generation length
+        do_sample (bool): whether to sample (set False for deterministic output)
+
+    Returns:
+        List[str]: paraphrased strings in same order
+    """
     bullets = []
-    for chunk in chunks:
-        input_text = "paraphrase: " + chunk + " </s>"
-        encoding = tokenizer.encode_plus(
-            input_text,
-            max_length=256,
-            padding="max_length",
+    if not chunks:
+        return bullets
+
+    total = len(chunks)
+    model, tokenizer, device = get_model_tokenizer_device()
+    for i in range(0, total, batch_size):
+        batch = chunks[i:i+batch_size]
+        inputs = ["paraphrase: " + c + " </s>" for c in batch]
+        encoding = tokenizer.batch_encode_plus(
+            inputs,
+            max_length=512,
+            padding=True,
             truncation=True,
             return_tensors="pt"
         )
         input_ids = encoding["input_ids"].to(device)
-        attention_mask = encoding["attention_mask"].to(device)
+        attention_mask = encoding.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
 
-        output = model.generate(
+        outputs = model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            max_length=128,
-            num_beams=5,
+            max_length=max_length,
+            num_beams=num_beams,
             num_return_sequences=1,
-            temperature=1.5,
-            top_k=50,
-            top_p=0.95
+            do_sample=do_sample
         )
 
-        paraphrased = tokenizer.decode(output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
-        bullets.append(paraphrased)
+        # outputs shape: (batch_size, seq_len)
+        for out in outputs:
+            paraphrased = tokenizer.decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+            bullets.append(paraphrased)
+
     return bullets
