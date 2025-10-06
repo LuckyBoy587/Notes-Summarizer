@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     # Paraphrasing benchmark (if model available)
     try:
-        from config import model, tokenizer, device
+        from config import get_model_tokenizer_device
         from paraphrasing import paraphrase_chunks
         # gather some chunks to paraphrase
         sample_chunks = []
@@ -48,13 +48,15 @@ if __name__ == '__main__':
             print('No chunks to paraphrase')
         else:
             sample = sample_chunks[:8]
+            # ensure model is loaded
+            get_model_tokenizer_device()
             s = time.perf_counter()
-            _ = paraphrase_chunks(sample, model, tokenizer, device, batch_size=1, num_beams=1)
+            _ = paraphrase_chunks(sample, batch_size=1, num_beams=1)
             e = time.perf_counter()
             print('paraphrase_chunks batch_size=1 (8 items):', fmt(e-s))
 
             s = time.perf_counter()
-            _ = paraphrase_chunks(sample, model, tokenizer, device, batch_size=8, num_beams=1)
+            _ = paraphrase_chunks(sample, batch_size=8, num_beams=1)
             e = time.perf_counter()
             print('paraphrase_chunks batch_size=8 (8 items):', fmt(e-s))
     except Exception as exc:
