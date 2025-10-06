@@ -6,6 +6,9 @@ import os
 import torch
 import nltk
 
+nltk.download('punkt')
+nltk.download('punkt_tab')  # For better sentence tokenization with tabs
+
 def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
     # Process PDF: Extract topics, split, paraphrase, and save (use fast sampling for extraction)
     # fast=True uses a small set of sampled pages to estimate font-size thresholds which speeds up large PDFs
@@ -34,8 +37,7 @@ def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
 
 def run(argv=None):
     import argparse
-    nltk.download('punkt')
-    nltk.download('punkt_tab')  # For better sentence tokenization with tabs
+    
     parser = argparse.ArgumentParser(description='Summarize PDF(s) and produce paraphrased text files.')
     parser.add_argument('pdfs', nargs='*', help='Path(s) to PDF file(s)')
     args = parser.parse_args(argv)
