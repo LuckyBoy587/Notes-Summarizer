@@ -24,4 +24,4 @@ def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
         f.write(output_content)
 
     print(f"Output saved to {output_filename}")
-    return output_filename
+    return output_content
