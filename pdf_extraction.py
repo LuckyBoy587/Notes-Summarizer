@@ -1,9 +1,16 @@
 import fitz  # This is the PyMuPDF library
 import re
 import os
+import math
 import statistics
+from typing import Iterable
 
-def extract_topics_from_pdf(pdf_path, write_to_file=False):
+# Precompile regexes used frequently to avoid recompilation cost
+_BULLET_CLEAN_RE = re.compile(r'[•◦\u2022\u2023\u25E6\*\u2024]+')
+_WHITESPACE_RE = re.compile(r"\s+")
+_BULLET_DETECT_RE = re.compile(r'^\s*([•◦\u2022\u2023\u25E6\*\-\u2024]|\d+[\.)])\s+')
+
+def extract_topics_from_pdf(pdf_path, write_to_file=False, fast=False, sample_pages=4):
     """
     Extracts content from a PDF and formats it into <TOPIC> blocks.
 
@@ -27,8 +34,37 @@ def extract_topics_from_pdf(pdf_path, write_to_file=False):
 
     # Instead of a fixed font size threshold, derive a threshold per-document
     # using statistics on observed font sizes (more robust across PDFs).
-    all_font_sizes = []
+    # We'll use an online accumulator for mean/stdev to avoid storing all font sizes
+    class Welford:
+        def __init__(self):
+            self.n = 0
+            self.mean = 0.0
+            self.m2 = 0.0
+
+        def add(self, x: float):
+            self.n += 1
+            delta = x - self.mean
+            self.mean += delta / self.n
+            delta2 = x - self.mean
+            self.m2 += delta * delta2
+
+        def variance(self):
+            return self.m2 / self.n if self.n > 0 else 0.0
+
+        def pstdev(self):
+            return math.sqrt(self.variance())
+
+    font_acc = Welford()
     page_lines = []  # store (page_num, line_text, max_font_size, min_x)
+
+    # Optionally sample only a few pages for faster stats estimation
+    total_pages = len(doc)
+
+    # Choose which pages to sample for font stats when fast=True
+    sample_set = set()
+    if fast and total_pages > 0:
+        step = max(1, total_pages // sample_pages)
+        sample_set = set(range(0, total_pages, step))
 
     for page_num, page in enumerate(doc):
         blocks = page.get_text("dict")["blocks"]
@@ -53,16 +89,18 @@ def extract_topics_from_pdf(pdf_path, write_to_file=False):
                     line_text = " ".join(line_parts).strip()
                     if not line_text:
                         continue
-                    all_font_sizes.append(max_font_size)
+                    # Only add to font accumulator if we're sampling this page or not in fast mode
+                    if (not fast) or (page_num in sample_set):
+                        font_acc.add(max_font_size)
                     page_lines.append((page_num, line_text, max_font_size, min_x))
 
-    if not all_font_sizes:
+    if font_acc.n == 0:
         doc.close()
-        return ""  # empty PDF or nothing extracted
+        return ""
 
     # Heuristic: heading threshold = mean + 0.8 * stdev (works across many documents)
-    mean_size = statistics.mean(all_font_sizes)
-    stdev_size = statistics.pstdev(all_font_sizes) if len(all_font_sizes) > 1 else 0.0
+    mean_size = font_acc.mean
+    stdev_size = font_acc.pstdev() if font_acc.n > 1 else 0.0
     HEADING_FONT_THRESHOLD = mean_size + 0.8 * stdev_size
 
     # Build structured content using the computed threshold
@@ -202,10 +240,15 @@ if __name__ == "__main__":
     import argparse
     import sys
     import os
+    # Import post-processing only when requested (it may pull heavy deps like NLTK)
+    split_into_topics = None
 
     parser = argparse.ArgumentParser(description="Quick test runner for pdf_extraction.extract_topics_from_pdf")
     parser.add_argument("pdf", nargs="?", help="Path to the PDF file to test")
     parser.add_argument("--write", action="store_true", help="Write output to a .txt file beside the script")
+    parser.add_argument("--fast", action="store_true", help="Use fast sampling mode for font-size stats (faster for large PDFs)")
+    parser.add_argument("--sample-pages", type=int, default=4, help="Number of pages to sample when --fast is used")
+    parser.add_argument("--post", action="store_true", help="Run post-processing (split into topics). Disabled by default to keep runs fast")
     args = parser.parse_args()
 
     if not args.pdf:
@@ -216,12 +259,20 @@ if __name__ == "__main__":
         print(f"File not found: {args.pdf}")
         sys.exit(1)
 
-    result = extract_topics_from_pdf(args.pdf, write_to_file=True)
+    result = extract_topics_from_pdf(args.pdf, write_to_file=args.write, fast=args.fast, sample_pages=args.sample_pages)
     if isinstance(result, str):
         # Print a concise preview to verify output without flooding the console
         preview = result if len(result) <= 2000 else result[:2000] + "\n... (truncated)"
-        print(preview)
-        # print(split_into_topics(result))
+        # Only run heavier post-processing when explicitly requested
+        if args.post:
+            try:
+                from text_processing import split_into_topics
+                print(split_into_topics(result).get("IMPORTANT ASPECTS", preview))
+            except Exception as e:
+                print("Post-processing failed:", e)
+                print(preview)
+        else:
+            print(preview)
     else:
         print("Unexpected return value:", type(result))
     print("\n--- done ---")
