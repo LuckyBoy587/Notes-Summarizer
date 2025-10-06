@@ -57,4 +57,6 @@ def run(argv=None):
 
 
 if __name__ == '__main__':
+    nltk.download('punkt')
+    nltk.download('punkt_tab')  # For better sentence tokenization with tabs
     run()
