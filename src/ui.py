@@ -232,25 +232,50 @@ def summarize_interface(uploaded_files, raw_text, selected_indices, max_length, 
 
 # Minimal Gradio UI wiring (re-creates the Blocks UI from the notebook)
 def launch_demo():
-    with gr.Blocks() as demo:
-        gr.Markdown('Upload notes (.txt, .md, .pdf) or paste text. Select files to summarize and press Summarize.')
-        with gr.Row():
-            file_input = gr.File(file_count='multiple', label='Upload note files')
-            text_input = gr.Textbox(lines=8, placeholder='Paste note text here', label='Raw text')
-        with gr.Row():
-            max_length = gr.Slider(16, 1024, value=128, step=8, label='max_length')
-            min_length = gr.Slider(8, 512, value=30, step=1, label='min_length')
-        with gr.Row():
-            num_return_sequences = gr.Slider(1, 5, value=1, step=1, label='num_return_sequences')
-            temperature = gr.Slider(0.1, 2.0, value=1.0, step=0.1, label='temperature')
-            num_beams = gr.Slider(1, 8, value=4, step=1, label='num_beams')
-        use_fp16 = gr.Checkbox(value=True, label='use_fp16_on_cuda (if GPU)')
-        selected_indices = gr.Textbox(lines=1, placeholder='e.g. 0,2 to pick first and third uploaded files (or leave empty)', label='selected_indices')
-        summarize_btn = gr.Button('Summarize')
-        output = gr.Textbox(label='Summaries (display)')
-        download_output = gr.File(label='Download results')
-        html_download = gr.HTML(label='Download (auto)')
+    # Simple UI: upload a single PDF and press Summarize. Display the paraphrased output.
+    def summarize_pdf_simple(uploaded_file):
+        if not uploaded_file:
+            return 'No file uploaded. Please upload a PDF file.'
 
-        summarize_btn.click(fn=summarize_interface, inputs=[file_input, text_input, selected_indices, max_length, min_length, num_return_sequences, temperature, num_beams, use_fp16], outputs=[output, download_output, html_download])
+        path = getattr(uploaded_file, 'name', None)
+        # If we have a real file path and it's a PDF, use the PDF extractor
+        try:
+            if path and Path(path).suffix.lower() == '.pdf' and os.path.exists(path):
+                extracted_text = extract_topics_from_pdf(path, fast=True, sample_pages=3)
+            else:
+                # Fallback: try to read uploaded file content and treat as text
+                try:
+                    txt = load_text_from_uploaded(uploaded_file)
+                except Exception as e:
+                    return f'Error reading uploaded file: {e}'
+                extracted_text = txt
+
+            topics = split_into_topics(extracted_text)
+
+            # Paraphrase each topic's chunks (use reasonable defaults)
+            out = []
+            for topic, chunks in topics.items():
+                out.append(f"## {topic}\n")
+                try:
+                    bullets = paraphrase_chunks(chunks, batch_size=16, num_beams=1, max_length=64, do_sample=True)
+                except Exception as e:
+                    bullets = [f'<<Error paraphrasing topic "{topic}": {e}>>']
+                out.extend([f'• {b}' for b in bullets])
+
+            result_text = '\n'.join(out).strip()
+            if not result_text:
+                return 'No summary produced (empty document or extractor failed).'
+            return result_text
+        except Exception as e:
+            return f'Unhandled error: {e}'
+
+    with gr.Blocks() as demo:
+        gr.Markdown('Upload a PDF and click Summarize. The paraphrased summary will display below.')
+        with gr.Row():
+            file_input = gr.File(file_count='single', label='Upload PDF file')
+            summarize_btn = gr.Button('Summarize')
+        output = gr.Textbox(lines=20, label='Summary')
+
+        summarize_btn.click(fn=summarize_pdf_simple, inputs=[file_input], outputs=[output])
 
     demo.launch(share=False)
