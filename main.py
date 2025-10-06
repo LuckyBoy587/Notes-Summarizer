@@ -1,46 +1,47 @@
-import argparse
-from config import get_model_tokenizer_device
+from config import get_model_tokenizer_device, get_device
 from text_processing import split_into_topics
 from paraphrasing import paraphrase_chunks
 from pdf_extraction import extract_topics_from_pdf
+from google.colab import files
+import os
+import torch
 
-def process_text_and_write_to_file(topics, filename="paraphrased_output.txt"):
-    """
-    Processes the input text by paraphrasing chunks,
-    then writes the results to a text file with bullet points.
+def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
+    # Process PDF: Extract topics, split, paraphrase, and save (use fast sampling for extraction)
+    # fast=True uses a small set of sampled pages to estimate font-size thresholds which speeds up large PDFs
+    if paraphrase_kwargs is None:
+        paraphrase_kwargs = {'batch_size': 16, 'num_beams': 1, 'max_length': 64, 'do_sample': True}
+    extracted_text = extract_topics_from_pdf(pdf_filename, fast=True, sample_pages=3)
+    topics = split_into_topics(extracted_text)
 
-    Args:
-        topics (dict): A dictionary where keys are topic names and values are lists of sentences.
-        filename (str): The name for the output file.
-    """
     output_content = ""
-    # Ensure model is loaded lazily only when paraphrasing
-    get_model_tokenizer_device()
     for topic, chunks in topics.items():
-        print(chunks)
-        bullets = paraphrase_chunks(chunks)
-
-        # Format as bullet points
+        if paraphrase:
+            bullets = paraphrase_chunks(chunks, **paraphrase_kwargs)
+        else:
+            bullets = chunks
         output_content += f"\n## {topic}\n"
         output_content += "\n".join([f"• {b}" for b in bullets]) + "\n"
 
-    # Generate a filename if not provided based on the first topic or default
-    if filename == "paraphrased_output.txt" and topics:
-        first_topic = list(topics.keys())[0]
-        filename = f"{first_topic.replace(' ', '_').lower()}_paraphrased.txt"
-    elif filename == "paraphrased_output.txt":
-        filename = "paraphrased_output.txt"
-
-    with open(filename, 'w', encoding='utf-8') as f:
+    output_filename = pdf_filename.replace('.pdf', '_paraphrased.txt')
+    with open(output_filename, 'w', encoding='utf-8') as f:
         f.write(output_content)
-    print(f"Processed text and created file: {filename}")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract topics from PDF and paraphrase them.")
-    parser.add_argument("pdf_path", help="Path to the PDF file")
-    parser.add_argument("--output", default="paraphrased_output.txt", help="Output filename")
-    args = parser.parse_args()
+    print(f"Output saved to {output_filename}")
+    # Download the result
+    files.download(output_filename)
 
-    extracted_text = extract_topics_from_pdf(args.pdf_path)
-    topics = split_into_topics(extracted_text)
-    process_text_and_write_to_file(topics, args.output)
+
+def run():
+    # Import modules
+    # Show device info so you know whether GPU fp16 is being used
+    print('torch.cuda.is_available():', torch.cuda.is_available())
+    print('device:', get_device())
+
+    uploaded = files.upload()
+    for pdf_filename in uploaded.keys():
+        # Run with paraphrasing using faster generation defaults
+        summarize_pdf(pdf_filename, paraphrase=True)
+
+
+run()

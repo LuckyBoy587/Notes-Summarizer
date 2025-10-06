@@ -2,3 +2,6 @@ transformers
 torch
 nltk
 PyMuPDF
+sentencepiece
+gradio
+PyPDF2
