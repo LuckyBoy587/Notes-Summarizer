@@ -2,7 +2,6 @@ from config import get_model_tokenizer_device, get_device
 from text_processing import split_into_topics
 from paraphrasing import paraphrase_chunks
 from pdf_extraction import extract_topics_from_pdf
-from google.colab import files
 import os
 import torch
 
@@ -28,20 +27,31 @@ def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
         f.write(output_content)
 
     print(f"Output saved to {output_filename}")
-    # Download the result
-    files.download(output_filename)
+    # Return the path to the generated file so callers can handle download/transfer
+    return output_filename
 
 
-def run():
-    # Import modules
+def run(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser(description='Summarize PDF(s) and produce paraphrased text files.')
+    parser.add_argument('pdfs', nargs='*', help='Path(s) to PDF file(s)')
+    args = parser.parse_args(argv)
+
     # Show device info so you know whether GPU fp16 is being used
     print('torch.cuda.is_available():', torch.cuda.is_available())
     print('device:', get_device())
 
-    uploaded = files.upload()
-    for pdf_filename in uploaded.keys():
-        # Run with paraphrasing using faster generation defaults
-        summarize_pdf(pdf_filename, paraphrase=True)
+    if not args.pdfs:
+        print('No PDF paths provided. Call this script with one or more PDF file paths.')
+        return
+
+    for pdf_path in args.pdfs:
+        if not os.path.exists(pdf_path):
+            print(f'File not found: {pdf_path}')
+            continue
+        out = summarize_pdf(pdf_path, paraphrase=True)
+        print('Generated:', out)
 
 
-run()
+if __name__ == '__main__':
+    run()
