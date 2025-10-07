@@ -1,6 +1,13 @@
 import re
+from functools import lru_cache
+
+# Precompile regexes for better performance
+_TOPIC_HEADER_RE = re.compile(r'^<.*>$')
+_WHITESPACE_RE = re.compile(r'\s+')
+_DASH_RE = re.compile(r'\s*[-–]+\s*')
 
 # Defer heavy imports (nltk) until actually needed by functions
+@lru_cache(maxsize=1)
 def _get_sent_tokenize():
     from nltk.tokenize import sent_tokenize
     return sent_tokenize
@@ -15,10 +22,10 @@ def split_into_topics(text):
         if buf:
             # Join lines into one block
             block = " ".join(buf)
-            # Clean unwanted breaks/spaces
-            block = re.sub(r'\s+', ' ', block).strip()
+            # Clean unwanted breaks/spaces using precompiled regex
+            block = _WHITESPACE_RE.sub(' ', block).strip()
             # Replace dashes/bullets with colons for readability
-            block = re.sub(r'\s*[-–]+\s*', ': ', block)
+            block = _DASH_RE.sub(': ', block)
             # Split into sentences (import lazily)
             sent_tokenize = _get_sent_tokenize()
             return sent_tokenize(block)
@@ -26,7 +33,7 @@ def split_into_topics(text):
 
     for line in lines:
         line = line.strip()
-        if re.match(r'^<.*>$', line):  # topic header
+        if _TOPIC_HEADER_RE.match(line):  # topic header
             if current_topic and buffer:
                 topics[current_topic].extend(flush_buffer(current_topic, buffer))
             topic_name = line.strip("<>").strip()

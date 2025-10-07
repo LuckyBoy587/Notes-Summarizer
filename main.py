@@ -8,24 +8,36 @@ import nltk
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 
+# Download NLTK data once at module level with quiet flag
+def _ensure_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt', quiet=True)
+    try:
+        nltk.data.find('tokenizers/punkt_tab')
+    except LookupError:
+        nltk.download('punkt_tab', quiet=True)
+
+_ensure_nltk_data()
+
 def summarize_pdf(pdf_filename, paraphrase=True, paraphrase_kwargs=None):
     # Process PDF: Extract topics, split, paraphrase, and save (use fast sampling for extraction)
     # fast=True uses a small set of sampled pages to estimate font-size thresholds which speeds up large PDFs
-    nltk.download('punkt')
-    nltk.download('punkt_tab')  # For better sentence tokenization with tabs
     if paraphrase_kwargs is None:
         paraphrase_kwargs = {'batch_size': 16, 'num_beams': 1, 'max_length': 64, 'do_sample': True}
     extracted_text = extract_topics_from_pdf(pdf_filename, fast=True, sample_pages=3)
     topics = split_into_topics(extracted_text)
 
-    output_content = ""
+    output_parts = []
     for topic, chunks in topics.items():
         if paraphrase:
             bullets = paraphrase_chunks(chunks, **paraphrase_kwargs)
         else:
             bullets = chunks
-        output_content += f"\n## {topic}\n"
-        output_content += "\n".join([f"• {b}" for b in bullets]) + "\n"
+        output_parts.append(f"\n## {topic}\n")
+        output_parts.extend(f"• {b}\n" for b in bullets)
+    output_content = "".join(output_parts)
 
     output_filename = pdf_filename.replace('.pdf', '_paraphrased.txt')
     with open(output_filename, 'w', encoding='utf-8') as f:
@@ -88,14 +100,15 @@ def run(argv=None):
         paraphrased = paraphrase_chunks(flat_chunks, **paraphrase_kwargs)
 
         # Re-group paraphrased outputs back into topics
-        output_content = ''
+        output_parts = []
         idx = 0
         for topic, chunks in zip(topic_order, all_chunks):
             count = len(chunks)
             bullets = paraphrased[idx:idx+count]
             idx += count
-            output_content += f"\n## {topic}\n"
-            output_content += "\n".join([f"• {b}" for b in bullets]) + "\n"
+            output_parts.append(f"\n## {topic}\n")
+            output_parts.extend(f"• {b}\n" for b in bullets)
+        output_content = "".join(output_parts)
 
         output_filename = pdf_path.replace('.pdf', '_paraphrased.txt')
         with open(output_filename, 'w', encoding='utf-8') as f:
@@ -104,6 +117,4 @@ def run(argv=None):
 
 
 if __name__ == '__main__':
-    nltk.download('punkt')
-    nltk.download('punkt_tab')  # For better sentence tokenization with tabs
     run()

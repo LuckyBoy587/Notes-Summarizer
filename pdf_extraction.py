@@ -205,11 +205,11 @@ def extract_topics_from_pdf(pdf_path, write_to_file=False, fast=False, sample_pa
             out.append({'text': buf, 'is_bullet': False})
         return out
 
-    output = ''
+    output_parts = []
     for item in filtered_content:
         if isinstance(item, str) and item.startswith("<TOPIC>"):
             topic_name = item.replace("<TOPIC>", "").strip()
-            output += f"\n<{topic_name.upper()}>\n"
+            output_parts.append(f"\n<{topic_name.upper()}>\n")
         else:
             # item is a list of (text, indent)
             lines_with_indent = [(ln, indent) for ln, indent in item if ln.strip()]
@@ -221,12 +221,16 @@ def extract_topics_from_pdf(pdf_path, write_to_file=False, fast=False, sample_pa
                 if len(text) < 30 and not is_bullet:
                     continue
                 # keep bullets as individual lines
-                if (text[-1].isalnum()):
+                if text and text[-1].isalnum():
                     text += '.'
                 if is_bullet:
-                    output += '- ' + text + '\n'
+                    output_parts.append('- ')
+                    output_parts.append(text)
+                    output_parts.append('\n')
                 else:
-                    output += text + '\n\n'
+                    output_parts.append(text)
+                    output_parts.append('\n\n')
+    output = ''.join(output_parts)
 
     if write_to_file:
         base = os.path.basename(pdf_path)

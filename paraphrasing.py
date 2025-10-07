@@ -61,12 +61,13 @@ def paraphrase_chunks(chunks, batch_size=8, num_beams=2, max_length=128, do_samp
     Returns:
         List[str]: paraphrased strings in same order
     """
-    bullets = []
     if not chunks:
-        return bullets
+        return []
 
-    total = len(chunks)
+    # Load model once outside the loop
     model, tokenizer, device = get_model_tokenizer_device()
+    total = len(chunks)
+    bullets = []
     for i in range(0, total, batch_size):
         batch = chunks[i:i+batch_size]
         inputs = ["paraphrase: " + c + " </s>" for c in batch]
@@ -105,9 +106,8 @@ def paraphrase_chunks(chunks, batch_size=8, num_beams=2, max_length=128, do_samp
                     do_sample=do_sample
                 )
 
-        # outputs shape: (batch_size, seq_len)
-        for out in outputs:
-            paraphrased = tokenizer.decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-            bullets.append(paraphrased)
+        # Batch decode is faster than decoding one by one
+        batch_paraphrased = tokenizer.batch_decode(outputs, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        bullets.extend(batch_paraphrased)
 
     return bullets
